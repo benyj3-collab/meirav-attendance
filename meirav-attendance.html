@@ -472,8 +472,9 @@ tr:hover td { background:rgba(255,255,255,.02); }
       <p>מירב חברות בע"מ — פתח תקווה</p>
     </div>
     <div class="field">
-      <label>דוא"ל</label>
-      <input type="email" id="loginEmail" placeholder="name@merav.co.il" autocomplete="username">
+      <label>תעודת זהות</label>
+      <input type="tel" id="loginID" placeholder="9 ספרות" maxlength="9" autocomplete="username"
+        oninput="this.value=this.value.replace(/[^0-9]/g,'')">
     </div>
     <div class="field">
       <label>סיסמה</label>
@@ -481,7 +482,7 @@ tr:hover td { background:rgba(255,255,255,.02); }
     </div>
     <button class="btn-primary" onclick="doLogin()">כניסה למערכת</button>
     <div style="text-align:center;font-size:12px;color:var(--muted);margin-top:8px;">
-      🔒 מאובטח עם Firebase Authentication
+      🔒 כניסה עם תעודת זהות וסיסמה
     </div>
   </div>
 </div>
@@ -618,7 +619,7 @@ tr:hover td { background:rgba(255,255,255,.02); }
       <h3>➕ הוסף עובד חדש</h3>
       <div class="field"><label>שם מלא</label><input type="text" id="newName" placeholder="ישראל ישראלי"></div>
       <div class="form-row">
-        <div class="field"><label>דוא"ל</label><input type="email" id="newEmail" placeholder="emp@merav.co.il"></div>
+        <div class="field"><label>תעודת זהות</label><input type="tel" id="newEmail" placeholder="9 ספרות" maxlength="9" oninput="this.value=this.value.replace(/[^0-9]/g,'')"></div>
         <div class="field"><label>סיסמה</label><input type="password" id="newPass" placeholder="לפחות 6 תווים"></div>
       </div>
       <div class="field"><label>תפקיד</label>
@@ -706,15 +707,18 @@ function showApp(profile) {
 function showLogin() { showLoading(false); showScreen("loginScreen"); }
 
 async function doLogin() {
-  const email = document.getElementById("loginEmail").value.trim();
-  const pass  = document.getElementById("loginPass").value;
-  if (!email || !pass) return showToast("הזן אימייל וסיסמה", "error");
+  const id   = document.getElementById("loginID").value.trim();
+  const pass = document.getElementById("loginPass").value;
+  if (!id || !pass)      return showToast("הזן תעודת זהות וסיסמה", "error");
+  if (id.length < 5)     return showToast("תעודת זהות לא תקינה", "error");
+  // Convert ID to internal email
+  const email = id + "@merav-attendance.co.il";
   showLoading(true, "מתחבר...");
   try {
     await window.fbSignIn(email, pass);
   } catch(e) {
     showLoading(false);
-    const msg = e.code === "auth/invalid-credential" ? "אימייל או סיסמה שגויים" : e.message;
+    const msg = e.code === "auth/invalid-credential" ? "תעודת זהות או סיסמה שגויים" : e.message;
     showToast("שגיאה: " + msg, "error");
   }
 }
@@ -839,11 +843,14 @@ async function loadEmployeeList() {
 
 async function addEmployee() {
   const name  = document.getElementById("newName").value.trim();
-  const email = document.getElementById("newEmail").value.trim();
+  const idNum = document.getElementById("newEmail").value.trim();
   const pass  = document.getElementById("newPass").value;
   const role  = document.getElementById("newRole").value;
-  if (!name||!email||!pass) return showToast("מלא את כל השדות", "error");
+  if (!name||!idNum||!pass) return showToast("מלא את כל השדות", "error");
+  if (idNum.length < 5)     return showToast("תעודת זהות לא תקינה", "error");
   if (pass.length < 6)      return showToast("סיסמה — לפחות 6 תווים", "error");
+  // Convert ID to internal email
+  const email = idNum + "@merav-attendance.co.il";
   showLoading(true, "מוסיף עובד...");
   try {
     await window.fbCreateUser(email, pass, name, role);
@@ -851,7 +858,7 @@ async function addEmployee() {
     ["newName","newEmail","newPass"].forEach(id => document.getElementById(id).value = "");
     loadEmployeeList();
   } catch(e) {
-    showToast("שגיאה: " + (e.code==="auth/email-already-in-use"?"האימייל כבר קיים":e.message), "error");
+    showToast("שגיאה: " + (e.code==="auth/email-already-in-use"?"ת\"ז כבר קיימת במערכת":e.message), "error");
   }
   showLoading(false);
 }
