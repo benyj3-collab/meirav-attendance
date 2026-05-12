@@ -516,7 +516,7 @@ const app=initializeApp(cfg),db=getFirestore(app),auth=getAuth(app);
 onAuthStateChanged(auth,async u=>{
   if(u){
     const s=await getDoc(doc(db,"employees",u.uid));
-    const p=s.exists()?s.data():{name:u.email,role:"employee"};
+    const p=s.exists()?s.data():{name:u.email,role:"admin"};
     showApp(p);
   }else{showLogin();}
 });
