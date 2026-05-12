@@ -621,7 +621,41 @@ async function addEmployee(){
   showLoading(false);
 }
 
-// ── EXPORT EXCEL (פורמט חדש) ──
+// ── פונקציה משותפת לבניית מפת עובדים ──
+function buildEmpMap(emps, recs){
+  const empMap={};
+  // רק עובדים עם רשומות
+  recs.forEach(r=>{
+    if(!empMap[r.uid])empMap[r.uid]={name:r.name,idNum:r.idNum||"--",days:{}};
+    // עדכן פרטים מרשימת עובדים אם קיים
+    const found=emps.find(e=>e.uid===r.uid);
+    if(found){empMap[r.uid].name=found.name;empMap[r.uid].idNum=found.idNum||"--";}
+    const dateKey=r.ts.toLocaleDateString("he-IL");
+    if(!empMap[r.uid].days[dateKey])empMap[r.uid].days[dateKey]={in:null,out:null,inTS:null,outTS:null};
+    if(r.type==="in"&&!empMap[r.uid].days[dateKey].inTS){
+      empMap[r.uid].days[dateKey].in=r.ts.toLocaleTimeString("he-IL",{hour12:false,hour:"2-digit",minute:"2-digit"});
+      empMap[r.uid].days[dateKey].inTS=r.ts;
+    }
+    if(r.type==="out"){
+      // קח רק יציאה שאחרי כניסה
+      const inTS=empMap[r.uid].days[dateKey].inTS;
+      if(!empMap[r.uid].days[dateKey].outTS || r.ts>empMap[r.uid].days[dateKey].outTS){
+        empMap[r.uid].days[dateKey].out=r.ts.toLocaleTimeString("he-IL",{hour12:false,hour:"2-digit",minute:"2-digit"});
+        empMap[r.uid].days[dateKey].outTS=r.ts;
+      }
+    }
+  });
+  return empMap;
+}
+
+function calcHours(inTS,outTS){
+  if(!inTS||!outTS)return{str:"--",mins:0};
+  const mins=Math.round((outTS-inTS)/60000);
+  if(mins<=0)return{str:"--",mins:0};
+  return{str:Math.floor(mins/60)+":"+String(mins%60).padStart(2,"0"),mins};
+}
+
+// ── EXPORT EXCEL ──
 async function exportExcel(){
   if(!window._fbLoadAtt)return;
   showLoading(true,"מייצא...");
@@ -630,54 +664,44 @@ async function exportExcel(){
     const expFrom=document.getElementById("expFrom").value;
     const expTo=document.getElementById("expTo").value;
 
-    const [emps, recs]=await Promise.all([
+    const [emps,recs]=await Promise.all([
       window._fbGetEmps(),
       window._fbLoadAtt(expEmpVal,expFrom?new Date(expFrom):null,expTo?new Date(expTo+"T23:59:59"):null)
     ]);
 
-    // בנה מפה של עובדים (כולל עובדים שיש להם רשומות אבל לא בcollection)
-    const empMap={};
-    emps.forEach(e=>empMap[e.uid]={name:e.name,idNum:e.idNum||"--",days:{}});
-    recs.forEach(r=>{
-      if(!empMap[r.uid])empMap[r.uid]={name:r.name,idNum:r.idNum||"--",days:{}};
-      const dateKey=r.ts.toLocaleDateString("he-IL");
-      if(!empMap[r.uid].days[dateKey])empMap[r.uid].days[dateKey]={in:null,out:null,inTS:null,outTS:null};
-      if(r.type==="in"&&!empMap[r.uid].days[dateKey].in){
-        empMap[r.uid].days[dateKey].in=r.ts.toLocaleTimeString("he-IL",{hour12:false,hour:"2-digit",minute:"2-digit"});
-        empMap[r.uid].days[dateKey].inTS=r.ts;
-      }
-      if(r.type==="out"){
-        empMap[r.uid].days[dateKey].out=r.ts.toLocaleTimeString("he-IL",{hour12:false,hour:"2-digit",minute:"2-digit"});
-        empMap[r.uid].days[dateKey].outTS=r.ts;
-      }
-    });
+    if(!recs.length){showLoading(false);return showToast("אין נתונים לייצוא","info");}
 
+    const empMap=buildEmpMap(emps,recs);
     const rows=[];
+
     Object.values(empMap).forEach(emp=>{
-      if(!Object.keys(emp.days).length)return; // דלג על עובדים ללא רשומות
+      if(!Object.keys(emp.days).length)return;
       let totalDays=0,totalMins=0;
-      Object.entries(emp.days).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([date,d])=>{
-        let hoursStr="--";
-        if(d.inTS&&d.outTS){
-          const mins=Math.round((d.outTS-d.inTS)/60000);
-          totalMins+=mins;totalDays++;
-          hoursStr=Math.floor(mins/60)+":"+String(mins%60).padStart(2,"0");
-        }
+      // מיין לפי תאריך
+      const sortedDays=Object.entries(emp.days).sort((a,b)=>{
+        const da=a[0].split(".").reverse().join("-");
+        const db=b[0].split(".").reverse().join("-");
+        return da.localeCompare(db);
+      });
+      sortedDays.forEach(([date,d])=>{
+        const{str,mins}=calcHours(d.inTS,d.outTS);
+        if(mins>0){totalMins+=mins;totalDays++;}
         rows.push({
           "שם עובד":emp.name,
           "תעודת זהות":emp.idNum,
           "תאריך":date,
           "שעת כניסה":d.in||"--",
           "שעת יציאה":d.out||"--",
-          "סה\"כ שעות":hoursStr
+          "סה\"כ שעות":str
         });
       });
+      const{str:totalStr}=calcHours(new Date(0),new Date(totalMins*60000));
       const th=Math.floor(totalMins/60),tm=totalMins%60;
       rows.push({
-        "שם עובד":"סיכום — "+emp.name,
+        "שם עובד":">>> סיכום: "+emp.name,
         "תעודת זהות":emp.idNum,
         "תאריך":"",
-        "שעת כניסה":"ימים: "+totalDays,
+        "שעת כניסה":"סה\"כ ימים: "+totalDays,
         "שעת יציאה":"",
         "סה\"כ שעות":th+":"+String(tm).padStart(2,"0")
       });
@@ -685,12 +709,11 @@ async function exportExcel(){
     });
 
     if(!rows.length){showLoading(false);return showToast("אין נתונים לייצוא","info");}
-
     const ws=XLSX.utils.json_to_sheet(rows);
-    ws["!cols"]=[16,14,12,12,12,12].map(w=>({wch:w}));
+    ws["!cols"]=[18,14,12,12,12,13].map(w=>({wch:w}));
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws,"נוכחות");
-    XLSX.writeFile(wb,"נוכחות_מירב_"+(expFrom||"all")+".xlsx");
+    XLSX.writeFile(wb,"Meirav_Attendance_"+(expFrom||"all")+".xlsx");
     showToast("✅ Excel נוצר","success");
   }catch(e){showToast("שגיאה: "+e.message,"error");console.error(e);}
   showLoading(false);
@@ -700,68 +723,56 @@ async function exportPDF(){
   if(!window._fbLoadAtt)return;
   showLoading(true,"מייצא...");
   try{
-    const emps=await window._fbGetEmps();
-    const recs=await window._fbLoadAtt(
-      document.getElementById("expEmp").value||null,
-      document.getElementById("expFrom").value?new Date(document.getElementById("expFrom").value):null,
-      document.getElementById("expTo").value?new Date(document.getElementById("expTo").value+"T23:59:59"):null
-    );
+    const expEmpVal=document.getElementById("expEmp").value||null;
+    const expFrom=document.getElementById("expFrom").value;
+    const expTo=document.getElementById("expTo").value;
 
-    // בנה מבנה ימים כמו Excel
-    const empMap={};
-    emps.forEach(e=>empMap[e.uid]={name:e.name,idNum:e.idNum||"--",days:{}});
-    recs.forEach(r=>{
-      if(!empMap[r.uid])empMap[r.uid]={name:r.name,idNum:r.idNum||"--",days:{}};
-      const dateKey=r.ts.toLocaleDateString("he-IL");
-      if(!empMap[r.uid].days[dateKey])empMap[r.uid].days[dateKey]={in:null,out:null,inTS:null,outTS:null};
-      if(r.type==="in"&&!empMap[r.uid].days[dateKey].in){
-        empMap[r.uid].days[dateKey].in=r.ts.toLocaleTimeString("he-IL",{hour12:false,hour:"2-digit",minute:"2-digit"});
-        empMap[r.uid].days[dateKey].inTS=r.ts;
-      }
-      if(r.type==="out"){
-        empMap[r.uid].days[dateKey].out=r.ts.toLocaleTimeString("he-IL",{hour12:false,hour:"2-digit",minute:"2-digit"});
-        empMap[r.uid].days[dateKey].outTS=r.ts;
-      }
-    });
+    const [emps,recs]=await Promise.all([
+      window._fbGetEmps(),
+      window._fbLoadAtt(expEmpVal,expFrom?new Date(expFrom):null,expTo?new Date(expTo+"T23:59:59"):null)
+    ]);
 
+    if(!recs.length){showLoading(false);return showToast("No data to export","info");}
+
+    const empMap=buildEmpMap(emps,recs);
     const{jsPDF}=window.jspdf;
     const doc=new jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
-
-    // כותרת
     doc.setFillColor(11,17,32);doc.rect(0,0,297,210,"F");
     doc.setTextColor(226,232,240);doc.setFontSize(16);
-    doc.text("Meirav Ltd - Attendance Report",148,14,{align:"center"});
+    doc.text("Meirav Ltd - Attendance Report",148,13,{align:"center"});
     doc.setFontSize(10);doc.setTextColor(100,116,139);
-    const fromVal=document.getElementById("expFrom").value||"";
-    const toVal=document.getElementById("expTo").value||"";
-    doc.text("Period: "+fromVal+" to "+toVal,148,21,{align:"center"});
+    doc.text("Period: "+(expFrom||"--")+" to "+(expTo||"--"),148,21,{align:"center"});
 
     const tableRows=[];
     Object.values(empMap).forEach(emp=>{
+      if(!Object.keys(emp.days).length)return;
       let totalMins=0,totalDays=0;
-      Object.entries(emp.days).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([date,d])=>{
-        let hoursStr="--";
-        if(d.inTS&&d.outTS){
-          const mins=Math.round((d.outTS-d.inTS)/60000);
-          totalMins+=mins;totalDays++;
-          hoursStr=Math.floor(mins/60)+":"+String(mins%60).padStart(2,"0");
-        }
-        tableRows.push([emp.name,emp.idNum,date,d.in||"--",d.out||"--",hoursStr]);
+      const sortedDays=Object.entries(emp.days).sort((a,b)=>{
+        const da=a[0].split(".").reverse().join("-");
+        const db=b[0].split(".").reverse().join("-");
+        return da.localeCompare(db);
+      });
+      sortedDays.forEach(([date,d])=>{
+        const{str,mins}=calcHours(d.inTS,d.outTS);
+        if(mins>0){totalMins+=mins;totalDays++;}
+        // שם עובד — אם עברית, הצג ת"ז במקום
+        const empDisplay=/[\u0590-\u05FF]/.test(emp.name)?"ID:"+emp.idNum:emp.name;
+        tableRows.push([empDisplay,emp.idNum,date,d.in||"--",d.out||"--",str]);
       });
       const th=Math.floor(totalMins/60),tm=totalMins%60;
-      tableRows.push(["TOTAL: "+emp.name,emp.idNum,"Days: "+totalDays,"","",th+":"+String(tm).padStart(2,"0")]);
+      const empDisplay=/[\u0590-\u05FF]/.test(emp.name)?"ID:"+emp.idNum:emp.name;
+      tableRows.push(["TOTAL: "+empDisplay,emp.idNum,"Days: "+totalDays,"","",th+":"+String(tm).padStart(2,"0")]);
       tableRows.push(["","","","","",""]);
     });
 
     doc.autoTable({
-      head:[["Employee","ID","Date","Clock In","Clock Out","Total Hours"]],
+      head:[["Employee","ID","Date","Clock In","Clock Out","Hours"]],
       body:tableRows,
       startY:26,
-      styles:{fontSize:9,textColor:[226,232,240],fillColor:[19,29,48]},
+      styles:{fontSize:9,textColor:[226,232,240],fillColor:[19,29,48],font:"helvetica"},
       headStyles:{fillColor:[30,48,80],textColor:[255,255,255],fontStyle:"bold"},
-      alternateRowStyles:{fillColor:[26,38,64]},
       didParseCell:(data)=>{
-        if(data.row.raw&&data.row.raw[0]&&String(data.row.raw[0]).startsWith("TOTAL:")){
+        if(data.row.raw&&String(data.row.raw[0]).startsWith("TOTAL:")){
           data.cell.styles.fillColor=[30,48,80];
           data.cell.styles.fontStyle="bold";
           data.cell.styles.textColor=[6,182,212];
@@ -769,7 +780,8 @@ async function exportPDF(){
       },
       theme:"grid",margin:{left:10,right:10}
     });
-    doc.save("Meirav_Attendance_"+fromVal+".pdf");
+
+    doc.save("Meirav_Attendance_"+(expFrom||"all")+".pdf");
     showToast("✅ PDF נוצר","success");
   }catch(e){showToast("שגיאה: "+e.message,"error");console.error(e);}
   showLoading(false);
