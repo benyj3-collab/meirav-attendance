@@ -3,234 +3,139 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#0f172a">
+<meta name="theme-color" content="#0b1120">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>נוכחות | מירב</title>
-
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, addDoc, query, orderBy, getDocs,
-         serverTimestamp, doc, setDoc, getDoc, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, signOut,
-         onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-
-const firebaseConfig = {
-  apiKey:            "AIzaSyDRs2DHv_K-pE7SWIB0fB8JarBDfl5_gW0",
-  authDomain:        "meirav-attendance.firebaseapp.com",
-  projectId:         "meirav-attendance",
-  storageBucket:     "meirav-attendance.firebasestorage.app",
-  messagingSenderId: "466687298529",
-  appId:             "1:466687298529:web:1e1319dee5c2f6267960a0"
-};
-
-// ── GEOFENCE ──
-const STORE  = { lat: 32.0862447, lng: 34.8755220 };
-const RADIUS = 50;
-
-function calcDist(la1,ln1,la2,ln2){
-  const R=6371000, dL=(la2-la1)*Math.PI/180, dN=(ln2-ln1)*Math.PI/180;
-  const a=Math.sin(dL/2)**2+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dN/2)**2;
-  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-}
-
-async function getNTP(){
-  try{const r=await fetch("https://worldtimeapi.org/api/timezone/Asia/Jerusalem");
-  const d=await r.json();return new Date(d.datetime);}catch{return new Date();}
-}
-
-function getGPS(){
-  return new Promise((res,rej)=>{
-    if(!navigator.geolocation)return rej("GPS לא נתמך");
-    navigator.geolocation.getCurrentPosition(
-      p=>res({lat:p.coords.latitude,lng:p.coords.longitude,accuracy:p.coords.accuracy}),
-      e=>rej("שגיאת GPS: "+e.message),{enableHighAccuracy:true,timeout:12000});
-  });
-}
-
-const app=initializeApp(firebaseConfig);
-const db=getFirestore(app);
-const auth=getAuth(app);
-
-async function punch(type){
-  const user=auth.currentUser;
-  if(!user)return showToast("לא מחובר","error");
-  showLoading(true,type==="in"?"בודק מיקום ושעה...":"רושם יציאה...");
-  try{
-    const [t,gps]=await Promise.all([getNTP(),getGPS()]);
-    const dist=calcDist(gps.lat,gps.lng,STORE.lat,STORE.lng);
-    if(dist>RADIUS){showLoading(false);showToast("❌ מחוץ לטווח — "+Math.round(dist)+"מ' מהחנות (מותר "+RADIUS+"מ')","error");return;}
-    const snap=await getDoc(doc(db,"employees",user.uid));
-    const profile=snap.exists()?snap.data():{name:user.email,role:"employee"};
-    await addDoc(collection(db,"attendance"),{
-      uid:user.uid,name:profile.name,type,
-      timestamp:serverTimestamp(),clientTime:t.toISOString(),
-      distanceM:Math.round(dist),inGeofence:true,
-    });
-    showToast(type==="in"?"✅ כניסה נרשמה!":"✅ יציאה נרשמה!","success");
-    window.updateLastPunch&&window.updateLastPunch(type,t,Math.round(dist));
-  }catch(e){showToast("שגיאה: "+e,"error");}
-  showLoading(false);
-}
-
-async function loadAtt(uid,from,to){
-  const c=[orderBy("timestamp","desc")];
-  if(uid)c.push(where("uid","==",uid));
-  const snap=await getDocs(query(collection(db,"attendance"),...c));
-  const r=[];
-  snap.forEach(d=>{
-    const data=d.data();
-    const ts=data.timestamp?.toDate?data.timestamp.toDate():new Date(data.clientTime);
-    if(from&&ts<from)return;if(to&&ts>to)return;
-    r.push({id:d.id,...data,ts});
-  });
-  return r;
-}
-
-onAuthStateChanged(auth,async user=>{
-  if(user){
-    const snap=await getDoc(doc(db,"employees",user.uid));
-    const profile=snap.exists()?snap.data():{name:user.email,role:"employee"};
-    window._profile=profile;
-    showApp(profile);
-  }else{window._profile=null;showLogin();}
-});
-
-window.fbPunch=punch;
-window.fbLoadAtt=loadAtt;
-window.fbSignIn=(e,p)=>signInWithEmailAndPassword(auth,e,p);
-window.fbSignOut=()=>signOut(auth);
-window.fbCreateUser=async(email,pass,name,role)=>{
-  const c=await createUserWithEmailAndPassword(auth,email,pass);
-  await setDoc(doc(db,"employees",c.user.uid),{name,role,email,createdAt:new Date().toISOString()});
-};
-window.fbGetEmployees=async()=>{
-  const snap=await getDocs(collection(db,"employees"));
-  const l=[];snap.forEach(d=>l.push({uid:d.id,...d.data()}));return l;
-};
-</script>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&display=swap');
-:root{--bg:#0b1120;--surf:#131d30;--surf2:#1a2640;--brd:#1e3050;--blue:#3b82f6;--cyan:#06b6d4;--green:#10b981;--red:#ef4444;--amber:#f59e0b;--text:#e2e8f0;--muted:#64748b;--r:14px;--font:'Heebo',sans-serif;}
 *{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#0b1120;--surf:#131d30;--surf2:#1a2640;--brd:#1e3050;
+  --blue:#3b82f6;--cyan:#06b6d4;--green:#10b981;--red:#ef4444;--amber:#f59e0b;
+  --text:#e2e8f0;--muted:#64748b;--r:14px;--font:'Heebo',sans-serif;
+}
 body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;direction:rtl;overflow-x:hidden;}
-body::before{content:'';position:fixed;inset:0;z-index:-1;background:radial-gradient(ellipse 80% 50% at 15% 10%,rgba(59,130,246,.1),transparent 60%),radial-gradient(ellipse 60% 40% at 85% 85%,rgba(6,182,212,.07),transparent 60%);}
-.screen{display:none;}.screen.active{display:flex;flex-direction:column;min-height:100vh;}
-#overlay{position:fixed;inset:0;z-index:999;background:rgba(11,17,32,.8);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px;}
+body::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(ellipse 80% 50% at 15% 10%,rgba(59,130,246,.1),transparent 60%),
+             radial-gradient(ellipse 60% 40% at 85% 85%,rgba(6,182,212,.07),transparent 60%);}
+#overlay{position:fixed;inset:0;z-index:999;background:rgba(11,17,32,.85);backdrop-filter:blur(6px);
+  display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px;}
 #overlay.show{display:flex;}
 .spinner{width:44px;height:44px;border:3px solid var(--brd);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .load-txt{color:var(--muted);font-size:14px;}
-#toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surf2);border:1px solid var(--brd);color:var(--text);padding:12px 24px;border-radius:40px;font-size:14px;font-weight:600;z-index:998;white-space:nowrap;transition:transform .35s cubic-bezier(.34,1.56,.64,1),opacity .3s;opacity:0;max-width:92vw;box-shadow:0 8px 32px rgba(0,0,0,.5);}
+#toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(80px);
+  background:var(--surf2);border:1px solid var(--brd);color:var(--text);
+  padding:12px 24px;border-radius:40px;font-size:14px;font-weight:600;z-index:998;
+  white-space:nowrap;transition:transform .35s cubic-bezier(.34,1.56,.64,1),opacity .3s;
+  opacity:0;max-width:92vw;box-shadow:0 8px 32px rgba(0,0,0,.5);}
 #toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
 #toast.success{border-color:var(--green);background:rgba(16,185,129,.12);}
 #toast.error{border-color:var(--red);background:rgba(239,68,68,.12);}
-.hdr{background:var(--surf);border-bottom:1px solid var(--brd);padding:13px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
-.hdr-logo{width:34px;height:34px;background:linear-gradient(135deg,var(--blue),var(--cyan));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;}
-.hdr-title{font-size:16px;font-weight:700;margin-right:10px;}
+#toast.info{border-color:var(--blue);background:rgba(59,130,246,.12);}
+.screen{display:none;min-height:100vh;flex-direction:column;}
+.screen.active{display:flex;}
+.hdr{background:var(--surf);border-bottom:1px solid var(--brd);padding:13px 20px;
+  display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.hdr-logo{width:34px;height:34px;background:linear-gradient(135deg,var(--blue),var(--cyan));
+  border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;}
+.hdr-brand{display:flex;align-items:center;gap:10px;}
+.hdr-title{font-size:16px;font-weight:700;}
 .hdr-sub{font-size:12px;color:var(--muted);}
-.hdr-brand{display:flex;align-items:center;gap:8px;}
-.hdr-logout{background:none;border:1px solid var(--brd);color:var(--muted);border-radius:8px;padding:6px 14px;font-family:var(--font);font-size:13px;cursor:pointer;}
-.hdr-logout:hover{color:var(--red);border-color:var(--red);}
-
-/* LOGIN */
+.hdr-out{background:none;border:1px solid var(--brd);color:var(--muted);border-radius:8px;
+  padding:6px 14px;font-family:var(--font);font-size:13px;cursor:pointer;}
+.hdr-out:hover{color:var(--red);border-color:var(--red);}
 #loginScreen{align-items:center;justify-content:center;padding:24px;}
-.login-card{background:var(--surf);border:1px solid var(--brd);border-radius:24px;padding:36px 28px;width:100%;max-width:360px;}
-.brand-wrap{text-align:center;margin-bottom:24px;}
-.brand-icon{width:60px;height:60px;background:linear-gradient(135deg,var(--blue),var(--cyan));border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 14px;box-shadow:0 8px 28px rgba(59,130,246,.3);}
+.login-card{background:var(--surf);border:1px solid var(--brd);border-radius:24px;padding:40px 32px;width:100%;max-width:360px;}
+.brand-wrap{text-align:center;margin-bottom:28px;}
+.brand-icon{width:60px;height:60px;background:linear-gradient(135deg,var(--blue),var(--cyan));
+  border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:26px;
+  margin:0 auto 14px;box-shadow:0 8px 28px rgba(59,130,246,.3);}
 .brand-wrap h1{font-size:22px;font-weight:700;}
 .brand-wrap p{color:var(--muted);font-size:13px;margin-top:4px;}
-.toggle-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--surf2);border-radius:12px;padding:5px;margin-bottom:20px;}
-.toggle-btn{padding:10px;border:none;border-radius:9px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;background:transparent;color:var(--muted);}
-.toggle-btn.on{background:linear-gradient(135deg,var(--blue),var(--cyan));color:#fff;box-shadow:0 4px 14px rgba(59,130,246,.3);}
+.login-toggle{display:flex;background:var(--surf2);border-radius:10px;padding:4px;margin-bottom:18px;gap:4px;}
+.tog-btn{flex:1;padding:9px;border:none;border-radius:7px;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;}
+.tog-btn.on{background:linear-gradient(135deg,var(--blue),var(--cyan));color:#fff;}
+.tog-btn.off{background:transparent;color:var(--muted);}
 .field{margin-bottom:16px;}
 .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:600;}
-input,select{width:100%;background:var(--surf2);border:1px solid var(--brd);border-radius:10px;padding:12px 14px;color:var(--text);font-family:var(--font);font-size:15px;outline:none;direction:rtl;transition:border-color .2s;}
+input,select{width:100%;background:var(--surf2);border:1px solid var(--brd);border-radius:10px;
+  padding:12px 14px;color:var(--text);font-family:var(--font);font-size:15px;outline:none;direction:rtl;}
 input:focus,select:focus{border-color:var(--blue);}
-.btn-primary{width:100%;padding:13px;border:none;border-radius:10px;background:linear-gradient(135deg,var(--blue),var(--cyan));color:#fff;font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 4px 20px rgba(59,130,246,.3);transition:all .2s;margin-bottom:10px;}
-.btn-primary:hover{transform:translateY(-1px);}
-
-/* EMPLOYEE */
+.btn-primary{width:100%;padding:13px;border:none;border-radius:10px;
+  background:linear-gradient(135deg,var(--blue),var(--cyan));color:#fff;
+  font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;
+  box-shadow:0 4px 20px rgba(59,130,246,.3);margin-bottom:10px;}
 .emp-body{padding:20px;flex:1;}
-.geo-bar{display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);border-radius:10px;padding:10px;margin-bottom:14px;font-size:13px;}
-.geo-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite;}
+.geo-bar{display:flex;align-items:center;justify-content:center;gap:8px;
+  background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);
+  border-radius:10px;padding:10px;margin-bottom:16px;font-size:13px;}
+.geo-dot{width:8px;height:8px;border-radius:50%;background:var(--green);
+  box-shadow:0 0 8px var(--green);animation:pulse 2s infinite;}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
-.clock-card{background:var(--surf);border:1px solid var(--brd);border-radius:var(--r);padding:26px 20px;text-align:center;margin-bottom:18px;position:relative;overflow:hidden;}
-.clock-card::before{content:'';position:absolute;top:-50px;left:50%;transform:translateX(-50%);width:220px;height:220px;background:radial-gradient(circle,rgba(59,130,246,.15),transparent 70%);pointer-events:none;}
-.live-clock{font-size:52px;font-weight:900;letter-spacing:-2px;line-height:1;background:linear-gradient(135deg,#fff 30%,var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.clock-card{background:var(--surf);border:1px solid var(--brd);border-radius:var(--r);
+  padding:26px 20px;text-align:center;margin-bottom:16px;position:relative;overflow:hidden;}
+.clock-card::before{content:'';position:absolute;top:-50px;left:50%;transform:translateX(-50%);
+  width:220px;height:220px;background:radial-gradient(circle,rgba(59,130,246,.15),transparent 70%);pointer-events:none;}
+.live-clock{font-size:52px;font-weight:900;letter-spacing:-2px;line-height:1;
+  background:linear-gradient(135deg,#fff 30%,var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
 .live-date{font-size:14px;color:var(--muted);margin-top:6px;}
 .punch-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:22px;}
-.punch-btn{padding:18px 12px;border:none;border-radius:14px;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;transition:all .2s;}
-.punch-btn .icon{font-size:26px;}
-.punch-btn span{font-size:12px;opacity:.75;}
-.punch-btn:active{transform:scale(.96);}
+.punch-btn{padding:18px 12px;border:none;border-radius:14px;font-family:var(--font);
+  font-size:16px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;transition:all .2s;}
+.punch-btn .ico{font-size:26px;}.punch-btn span{font-size:12px;opacity:.75;}
 .btn-in{background:linear-gradient(135deg,#065f46,var(--green));color:#fff;box-shadow:0 4px 20px rgba(16,185,129,.3);}
 .btn-out{background:linear-gradient(135deg,#7f1d1d,var(--red));color:#fff;box-shadow:0 4px 20px rgba(239,68,68,.3);}
-.btn-in:hover{transform:translateY(-2px);}
-.btn-out:hover{transform:translateY(-2px);}
+.btn-in:hover,.btn-out:hover{transform:translateY(-2px);}.punch-btn:active{transform:scale(.96);}
 .stat-card{background:var(--surf);border:1px solid var(--brd);border-radius:var(--r);padding:16px 18px;margin-bottom:14px;}
 .stat-card h3{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;}
 .stat-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--brd);}
 .stat-row:last-child{border-bottom:none;}
 .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
-.dot-g{background:var(--green);box-shadow:0 0 7px var(--green);}
-.dot-a{background:var(--amber);}
-.dot-m{background:var(--muted);}
-.stat-lbl{font-size:13px;color:var(--muted);flex:1;}
-.stat-val{font-size:13px;font-weight:700;}
+.dot-g{background:var(--green);box-shadow:0 0 7px var(--green);}.dot-a{background:var(--amber);}.dot-m{background:var(--muted);}
+.stat-lbl{font-size:13px;color:var(--muted);flex:1;}.stat-val{font-size:13px;font-weight:700;}
 .info-box{background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.2);border-radius:10px;padding:13px;font-size:13px;color:#93c5fd;line-height:1.7;}
-
-/* ADMIN */
 .admin-tabs{background:var(--surf);border-bottom:1px solid var(--brd);display:flex;padding:0 14px;overflow-x:auto;gap:2px;position:sticky;top:60px;z-index:90;}
-.tab-btn{background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);font-family:var(--font);font-size:13px;font-weight:500;padding:12px 14px;cursor:pointer;white-space:nowrap;transition:all .2s;}
+.tab-btn{background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);font-family:var(--font);font-size:13px;font-weight:500;padding:12px 14px;cursor:pointer;white-space:nowrap;}
 .tab-btn.on{color:var(--blue);border-bottom-color:var(--blue);font-weight:600;}
-.tab-pane{display:none;padding:18px;}
-.tab-pane.on{display:block;}
+.tab-pane{display:none;padding:18px;}.tab-pane.on{display:block;}
 .kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;}
 .kpi{background:var(--surf);border:1px solid var(--brd);border-radius:var(--r);padding:16px;position:relative;overflow:hidden;}
 .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--c,var(--blue));}
-.kpi-num{font-size:30px;font-weight:900;color:var(--c,var(--blue));line-height:1;}
-.kpi-lbl{font-size:11px;color:var(--muted);margin-top:4px;}
+.kpi-num{font-size:30px;font-weight:900;color:var(--c,var(--blue));line-height:1;}.kpi-lbl{font-size:11px;color:var(--muted);margin-top:4px;}
+.geo-info{background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:14px;margin-bottom:14px;font-size:13px;line-height:1.8;}
 .tbl-wrap{background:var(--surf);border:1px solid var(--brd);border-radius:var(--r);overflow:hidden;overflow-x:auto;margin-bottom:16px;}
-table{width:100%;border-collapse:collapse;font-size:13px;min-width:400px;}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:420px;}
 thead{background:var(--surf2);}
 th{padding:10px 13px;text-align:right;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
 td{padding:10px 13px;border-bottom:1px solid var(--brd);vertical-align:middle;}
-tr:last-child td{border-bottom:none;}
-tr:hover td{background:rgba(255,255,255,.02);}
+tr:last-child td{border-bottom:none;}tr:hover td{background:rgba(255,255,255,.02);}
 .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;}
-.b-in{background:rgba(16,185,129,.15);color:var(--green);}
-.b-out{background:rgba(239,68,68,.15);color:var(--red);}
-.b-ok{background:rgba(16,185,129,.15);color:var(--green);}
+.b-in{background:rgba(16,185,129,.15);color:var(--green);}.b-out{background:rgba(239,68,68,.15);color:var(--red);}.b-ok{background:rgba(16,185,129,.15);color:var(--green);}
 .sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
 .sec-title{font-size:15px;font-weight:700;}
 .sec-btn{background:none;border:1px solid var(--brd);color:var(--blue);border-radius:7px;padding:6px 14px;font-family:var(--font);font-size:12px;cursor:pointer;}
 .fbar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
 .fbar input,.fbar select{flex:1;min-width:130px;font-size:13px;padding:9px 12px;}
 .exp-bar{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
-.exp-btn{padding:11px;border:1px solid var(--brd);border-radius:10px;background:var(--surf2);color:var(--text);font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;}
+.exp-btn{padding:11px;border:1px solid var(--brd);border-radius:10px;background:var(--surf2);color:var(--text);font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;}
 .exp-btn:hover{border-color:var(--blue);color:var(--blue);}
 .add-card{background:var(--surf);border:1px solid var(--brd);border-radius:var(--r);padding:18px;margin-bottom:18px;}
 .add-card h3{font-size:14px;font-weight:700;margin-bottom:14px;}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 .emp-item{background:var(--surf);border:1px solid var(--brd);border-radius:var(--r);padding:12px 15px;display:flex;align-items:center;gap:12px;margin-bottom:8px;}
 .av{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;flex-shrink:0;}
-.emp-name{font-weight:700;font-size:14px;}
-.emp-meta{font-size:12px;color:var(--muted);margin-top:2px;}
-.geo-info{background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:14px;margin-bottom:14px;font-size:13px;line-height:1.7;}
-@media(max-width:400px){.kpi-grid{grid-template-columns:1fr 1fr;}.form-row{grid-template-columns:1fr;}}
+.emp-name{font-weight:700;font-size:14px;}.emp-meta{font-size:12px;color:var(--muted);margin-top:2px;}
+@media(max-width:400px){.form-row{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
+
 <div id="overlay"><div class="spinner"></div><div class="load-txt" id="loadTxt">טוען...</div></div>
 <div id="toast"></div>
 
-<!-- ══ LOGIN ══ -->
+<!-- LOGIN -->
 <div id="loginScreen" class="screen">
   <div class="login-card">
     <div class="brand-wrap">
@@ -238,48 +143,52 @@ tr:hover td{background:rgba(255,255,255,.02);}
       <h1>מערכת נוכחות</h1>
       <p>מירב חברות בע"מ — פתח תקווה</p>
     </div>
-
-    <div class="toggle-row">
-      <button class="toggle-btn on" id="btnEmp" onclick="setMode('emp')">👤 עובד</button>
-      <button class="toggle-btn" id="btnAdmin" onclick="setMode('admin')">🔑 מנהל</button>
+    <div class="login-toggle">
+      <button id="btnEmp"   class="tog-btn on"  onclick="setMode('emp')">👤 עובד</button>
+      <button id="btnAdmin" class="tog-btn off" onclick="setMode('admin')">🔑 מנהל</button>
     </div>
-
-    <div id="empLogin">
-      <div class="field"><label>תעודת זהות</label>
-        <input type="tel" id="loginID" placeholder="9 ספרות" maxlength="9" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+    <div id="empFields">
+      <div class="field">
+        <label>תעודת זהות</label>
+        <input type="tel" id="loginID" placeholder="הכנס מספר ת״ז" maxlength="9" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
       </div>
     </div>
-    <div id="adminLogin" style="display:none">
-      <div class="field"><label>דוא"ל</label>
+    <div id="adminFields" style="display:none;">
+      <div class="field">
+        <label>דוא"ל מנהל</label>
         <input type="email" id="loginEmail" placeholder="benyj3@gmail.com">
       </div>
     </div>
-
-    <div class="field"><label>סיסמה</label>
+    <div class="field">
+      <label>סיסמה</label>
       <input type="password" id="loginPass" placeholder="••••••••">
     </div>
     <button class="btn-primary" onclick="doLogin()">כניסה למערכת</button>
-    <div style="text-align:center;font-size:12px;color:var(--muted);">🔒 מאובטח עם Firebase</div>
+    <div style="text-align:center;font-size:12px;color:var(--muted);">🔒 מאובטח | Firebase</div>
   </div>
 </div>
 
-<!-- ══ EMPLOYEE ══ -->
+<!-- EMPLOYEE -->
 <div id="empScreen" class="screen">
   <div class="hdr">
     <div class="hdr-brand">
       <div class="hdr-logo">מ</div>
       <div><div class="hdr-title" id="empName">שלום!</div><div class="hdr-sub">מערכת נוכחות מירב</div></div>
     </div>
-    <button class="hdr-logout" onclick="doLogout()">יציאה</button>
+    <button class="hdr-out" onclick="doLogout()">יציאה</button>
   </div>
   <div class="emp-body">
-    <div class="geo-bar"><div class="geo-dot"></div><span style="color:var(--green);font-weight:600;">Geofence פעיל</span><span style="color:var(--muted);">— רדיוס 50מ' מהחנות</span></div>
+    <div class="geo-bar">
+      <div class="geo-dot"></div>
+      <span style="color:var(--green);font-weight:600;">Geofence פעיל</span>
+      <span style="color:var(--muted);">— רדיוס 50מ' מהחנות</span>
+    </div>
     <div class="clock-card">
       <div class="live-clock" id="liveClock">00:00:00</div>
-      <div class="live-date" id="liveDate">--</div>
+      <div class="live-date"  id="liveDate">--</div>
       <div class="punch-grid">
-        <button class="punch-btn btn-in" onclick="doPunch('in')"><div class="icon">🟢</div>כניסה<span>Clock In</span></button>
-        <button class="punch-btn btn-out" onclick="doPunch('out')"><div class="icon">🔴</div>יציאה<span>Clock Out</span></button>
+        <button class="punch-btn btn-in"  onclick="doPunch('in')"><div class="ico">🟢</div>כניסה<span>Clock In</span></button>
+        <button class="punch-btn btn-out" onclick="doPunch('out')"><div class="ico">🔴</div>יציאה<span>Clock Out</span></button>
       </div>
     </div>
     <div class="stat-card">
@@ -288,47 +197,54 @@ tr:hover td{background:rgba(255,255,255,.02);}
       <div class="stat-row"><div class="dot dot-g"></div><div class="stat-lbl">שעה (NTP)</div><div class="stat-val" id="statTime">--</div></div>
       <div class="stat-row"><div class="dot dot-a"></div><div class="stat-lbl">מרחק מהחנות</div><div class="stat-val" id="statDist">--</div></div>
     </div>
-    <div class="info-box">🔒 <strong>השעה משרת חיצוני</strong> — לא ניתן לשנות ממכשיר הנייד.<br>📍 <strong>דיווח תקף רק בתוך 50מ' מהחנות.</strong><br>✋ <strong>לא ניתן לערוך</strong> רשומה לאחר שנשמרה.</div>
+    <div class="info-box">
+      🔒 <strong>השעה משרת NTP</strong> — לא ניתן לשנות ממכשיר הנייד.<br>
+      📍 <strong>חייב להיות בתוך 50 מטר מהחנות</strong>.<br>
+      ✋ <strong>לא ניתן לערוך</strong> רשומה לאחר שנשמרה.
+    </div>
   </div>
 </div>
 
-<!-- ══ ADMIN ══ -->
+<!-- ADMIN -->
 <div id="adminScreen" class="screen">
   <div class="hdr">
     <div class="hdr-brand">
       <div class="hdr-logo">מ</div>
       <div><div class="hdr-title">ניהול נוכחות</div><div class="hdr-sub" id="adminName">--</div></div>
     </div>
-    <button class="hdr-logout" onclick="doLogout()">יציאה</button>
+    <button class="hdr-out" onclick="doLogout()">יציאה</button>
   </div>
   <div class="admin-tabs">
     <button class="tab-btn on" onclick="switchTab('dashboard',this)">📊 דאשבורד</button>
-    <button class="tab-btn" onclick="switchTab('records',this)">📋 רשומות</button>
-    <button class="tab-btn" onclick="switchTab('employees',this)">👥 עובדים</button>
-    <button class="tab-btn" onclick="switchTab('export',this)">📤 ייצוא</button>
+    <button class="tab-btn"   onclick="switchTab('records',this)">📋 רשומות</button>
+    <button class="tab-btn"   onclick="switchTab('employees',this)">👥 עובדים</button>
+    <button class="tab-btn"   onclick="switchTab('export',this)">📤 ייצוא</button>
   </div>
-
   <div id="tab-dashboard" class="tab-pane on">
     <div class="kpi-grid">
       <div class="kpi" style="--c:var(--green)"><div class="kpi-num" id="kpiPresent">--</div><div class="kpi-lbl">נוכחים היום</div></div>
-      <div class="kpi" style="--c:var(--red)"><div class="kpi-num" id="kpiAbsent">--</div><div class="kpi-lbl">נעדרים</div></div>
-      <div class="kpi" style="--c:var(--blue)"><div class="kpi-num" id="kpiTotal">--</div><div class="kpi-lbl">סה"כ עובדים</div></div>
-      <div class="kpi" style="--c:var(--amber)"><div class="kpi-num" id="kpiRec">--</div><div class="kpi-lbl">רשומות היום</div></div>
+      <div class="kpi" style="--c:var(--red)">  <div class="kpi-num" id="kpiAbsent">--</div> <div class="kpi-lbl">נעדרים</div></div>
+      <div class="kpi" style="--c:var(--blue)"> <div class="kpi-num" id="kpiTotal">--</div>  <div class="kpi-lbl">סה"כ עובדים</div></div>
+      <div class="kpi" style="--c:var(--amber)"><div class="kpi-num" id="kpiRec">--</div>    <div class="kpi-lbl">רשומות היום</div></div>
     </div>
-    <div class="geo-info">📍 <strong>Geofence פעיל</strong> — בורוכוב 18, פתח תקווה<br>רדיוס: <strong>50 מטר</strong> • 32.0862447, 34.8755220</div>
+    <div class="geo-info">📍 <strong>Geofence</strong> — בורוכוב 18, פתח תקווה • רדיוס <strong>50מ'</strong></div>
     <div class="sec-hdr"><div class="sec-title">פעילות היום</div><button class="sec-btn" onclick="loadDashboard()">↺ רענן</button></div>
-    <div class="tbl-wrap"><table><thead><tr><th>עובד</th><th>פעולה</th><th>שעה</th><th>מרחק</th></tr></thead><tbody id="todayTbody"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px;">טוען...</td></tr></tbody></table></div>
+    <div class="tbl-wrap">
+      <table><thead><tr><th>עובד</th><th>פעולה</th><th>שעה</th><th>מרחק</th></tr></thead>
+      <tbody id="todayTbody"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px;">טוען...</td></tr></tbody></table>
+    </div>
   </div>
-
   <div id="tab-records" class="tab-pane">
     <div class="fbar">
       <input type="date" id="fFrom" onchange="loadRecords()">
-      <input type="date" id="fTo" onchange="loadRecords()">
+      <input type="date" id="fTo"   onchange="loadRecords()">
       <select id="fEmp" onchange="loadRecords()"><option value="">כל העובדים</option></select>
     </div>
-    <div class="tbl-wrap"><table><thead><tr><th>עובד</th><th>פעולה</th><th>תאריך</th><th>שעה</th><th>מרחק</th></tr></thead><tbody id="recTbody"><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px;">בחר תאריכים</td></tr></tbody></table></div>
+    <div class="tbl-wrap">
+      <table><thead><tr><th>עובד</th><th>פעולה</th><th>תאריך</th><th>שעה</th><th>מרחק</th></tr></thead>
+      <tbody id="recTbody"><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px;">בחר תאריכים</td></tr></tbody></table>
+    </div>
   </div>
-
   <div id="tab-employees" class="tab-pane">
     <div class="add-card">
       <h3>➕ הוסף עובד חדש</h3>
@@ -343,7 +259,6 @@ tr:hover td{background:rgba(255,255,255,.02);}
     <div class="sec-hdr"><div class="sec-title">רשימת עובדים</div></div>
     <div id="empList"><div style="color:var(--muted);text-align:center;padding:24px;">טוען...</div></div>
   </div>
-
   <div id="tab-export" class="tab-pane">
     <div class="stat-card" style="margin-bottom:16px;">
       <h3>הגדרות ייצוא</h3>
@@ -358,30 +273,44 @@ tr:hover td{background:rgba(255,255,255,.02);}
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
 <script>
+// ════ UI HELPERS ════
 const DAYS=["ראשון","שני","שלישי","רביעי","חמישי","שישי","שבת"];
-const AVC=["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#ec4899"];
-let toastTimer,loginMode='emp';
+const AVC=["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6","#06b6d4"];
+let toastT, loginMode="emp";
 
 function showToast(msg,type="info"){
-  if(toastTimer)clearTimeout(toastTimer);
+  if(toastT)clearTimeout(toastT);
   const t=document.getElementById("toast");
-  t.textContent=msg;t.className="show "+(type==="success"?"success":type==="error"?"error":"");
-  toastTimer=setTimeout(()=>t.className="",3500);
+  t.textContent=msg;t.className="show "+type;
+  toastT=setTimeout(()=>t.className="",3500);
 }
 function showLoading(on,txt="מעבד..."){
   document.getElementById("overlay").classList.toggle("show",on);
   document.getElementById("loadTxt").textContent=txt;
 }
-function showScreen(id){document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));document.getElementById(id).classList.add("active");}
+function showScreen(id){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
 function showLogin(){showLoading(false);showScreen("loginScreen");}
 function showApp(p){
-  if(p.role==="admin"){document.getElementById("adminName").textContent="שלום, "+p.name;showScreen("adminScreen");loadDashboard();loadEmpList();}
-  else{document.getElementById("empName").textContent="שלום, "+p.name+" 👋";showScreen("empScreen");}
+  if(p.role==="admin"){
+    document.getElementById("adminName").textContent="שלום, "+p.name;
+    showScreen("adminScreen");
+    loadDashboard();loadEmpList();
+  }else{
+    document.getElementById("empName").textContent="שלום, "+p.name+" 👋";
+    showScreen("empScreen");
+  }
   showLoading(false);
 }
 
-// Clock
+// Live clock
 setInterval(()=>{
   const n=new Date();
   const cl=document.getElementById("liveClock");
@@ -390,14 +319,13 @@ setInterval(()=>{
   if(dl)dl.textContent="יום "+DAYS[n.getDay()]+" • "+n.toLocaleDateString("he-IL");
 },1000);
 
-// Login toggle
-let loginMode="emp";
+// ════ LOGIN ════
 function setMode(m){
   loginMode=m;
-  document.getElementById("empFields").style.display=m==="emp"?"block":"none";
+  document.getElementById("empFields").style.display  =m==="emp"  ?"block":"none";
   document.getElementById("adminFields").style.display=m==="admin"?"block":"none";
-  document.getElementById("btnEmp").className="toggle-btn "+(m==="emp"?"active":"inactive");
-  document.getElementById("btnAdmin").className="toggle-btn "+(m==="admin"?"active":"inactive");
+  document.getElementById("btnEmp").className  ="tog-btn "+(m==="emp"  ?"on":"off");
+  document.getElementById("btnAdmin").className="tog-btn "+(m==="admin"?"on":"off");
 }
 
 async function doLogin(){
@@ -406,68 +334,75 @@ async function doLogin(){
   if(loginMode==="emp"){
     const id=document.getElementById("loginID").value.trim();
     if(!id||!pass)return showToast("הזן תעודת זהות וסיסמה","error");
+    if(id.length<5)return showToast("תעודת זהות לא תקינה","error");
     email=id+"@meirav-attendance.co.il";
   }else{
     email=document.getElementById("loginEmail").value.trim();
     if(!email||!pass)return showToast("הזן אימייל וסיסמה","error");
   }
   showLoading(true,"מתחבר...");
-  try{await window.fbSignIn(email,pass);}
-  catch(e){
+  try{
+    await window._fbSignIn(email,pass);
+  }catch(e){
     showLoading(false);
-    showToast("שגיאה: "+(e.code==="auth/invalid-credential"?(loginMode==="emp"?"תעודת זהות או סיסמה שגויים":"אימייל או סיסמה שגויים"):e.message),"error");
+    showToast("שגיאה: "+(e.code==="auth/invalid-credential"?(loginMode==="emp"?"ת\"ז או סיסמה שגויים":"אימייל או סיסמה שגויים"):e.message),"error");
   }
 }
-async function doLogout(){showLoading(true,"מתנתק...");await window.fbSignOut();}
-async function doPunch(t){await window.fbPunch(t);}
-window.updateLastPunch=(type,time,dist)=>{
-  document.getElementById("statAction").textContent=type==="in"?"✅ כניסה":"🔴 יציאה";
-  document.getElementById("statTime").textContent=time.toLocaleTimeString("he-IL",{hour12:false});
-  document.getElementById("statDist").textContent=dist+"מ' ✓";
-  document.getElementById("statDot").className="dot "+(type==="in"?"dot-g":"dot-m");
-};
 
+async function doLogout(){showLoading(true,"מתנתק...");await window._fbSignOut();}
+async function doPunch(t){
+  if(!window._fbPunch)return showToast("מתחבר לשרת...","info");
+  await window._fbPunch(t);
+}
+
+// ════ ADMIN ════
 function switchTab(name,btn){
   document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("on"));
   document.querySelectorAll(".tab-pane").forEach(p=>p.classList.remove("on"));
-  btn.classList.add("on");document.getElementById("tab-"+name).classList.add("on");
+  btn.classList.add("on");
+  document.getElementById("tab-"+name).classList.add("on");
   if(name==="records")loadRecords();
   if(name==="employees")loadEmpList();
 }
 
 async function loadDashboard(){
+  if(!window._fbLoadAtt)return;
   try{
     const start=new Date();start.setHours(0,0,0,0);
-    const [recs,emps]=await Promise.all([window.fbLoadAtt(null,start,null),window.fbGetEmployees()]);
-    const present=new Set(recs.filter(r=>r.type==="in").map(r=>r.uid)).size;
-    const empCount=emps.filter(e=>e.role!=="admin").length;
-    document.getElementById("kpiPresent").textContent=present;
-    document.getElementById("kpiAbsent").textContent=Math.max(0,empCount-present);
-    document.getElementById("kpiTotal").textContent=empCount;
+    const [recs,emps]=await Promise.all([window._fbLoadAtt(null,start,null),window._fbGetEmps()]);
+    const pUids=new Set(recs.filter(r=>r.type==="in").map(r=>r.uid));
+    const empCnt=emps.filter(e=>e.role!=="admin").length;
+    document.getElementById("kpiPresent").textContent=pUids.size;
+    document.getElementById("kpiAbsent").textContent=Math.max(0,empCnt-pUids.size);
+    document.getElementById("kpiTotal").textContent=empCnt;
     document.getElementById("kpiRec").textContent=recs.length;
-    const tbody=document.getElementById("todayTbody");
-    if(!recs.length){tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px;">אין רשומות להיום</td></tr>';return;}
-    tbody.innerHTML=recs.slice(0,15).map(r=>`<tr><td><strong>${r.name||"--"}</strong></td><td><span class="badge ${r.type==="in"?"b-in":"b-out"}">${r.type==="in"?"▶ כניסה":"◼ יציאה"}</span></td><td>${r.ts.toLocaleTimeString("he-IL",{hour12:false})}</td><td><span class="badge b-ok">✓ ${r.distanceM||"--"}מ'</span></td></tr>`).join("");
-  }catch(e){showToast("שגיאה","error");}
+    document.getElementById("todayTbody").innerHTML=!recs.length
+      ?'<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px;">אין רשומות</td></tr>'
+      :recs.slice(0,15).map(r=>`<tr><td><strong>${r.name||"--"}</strong></td><td><span class="badge ${r.type==="in"?"b-in":"b-out"}">${r.type==="in"?"▶ כניסה":"◼ יציאה"}</span></td><td>${r.ts.toLocaleTimeString("he-IL",{hour12:false})}</td><td><span class="badge b-ok">✓ ${r.distanceM||"--"}מ'</span></td></tr>`).join("");
+  }catch(e){showToast("שגיאה בטעינת נתונים","error");}
 }
 
 async function loadRecords(){
-  const from=document.getElementById("fFrom").value,to=document.getElementById("fTo").value,uid=document.getElementById("fEmp").value;
+  if(!window._fbLoadAtt)return;
+  const from=document.getElementById("fFrom").value;
+  const to=document.getElementById("fTo").value;
+  const uid=document.getElementById("fEmp").value;
   if(!from&&!to)return;
   showLoading(true,"טוען...");
   try{
-    const recs=await window.fbLoadAtt(uid||null,from?new Date(from):null,to?new Date(to+"T23:59:59"):null);
-    const tbody=document.getElementById("recTbody");
-    if(!recs.length){tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px;">אין רשומות</td></tr>';}
-    else tbody.innerHTML=recs.map(r=>`<tr><td><strong>${r.name||"--"}</strong></td><td><span class="badge ${r.type==="in"?"b-in":"b-out"}">${r.type==="in"?"כניסה":"יציאה"}</span></td><td>${r.ts.toLocaleDateString("he-IL")}</td><td>${r.ts.toLocaleTimeString("he-IL",{hour12:false})}</td><td>${r.distanceM||"--"}מ'</td></tr>`).join("");
+    const recs=await window._fbLoadAtt(uid||null,from?new Date(from):null,to?new Date(to+"T23:59:59"):null);
+    document.getElementById("recTbody").innerHTML=!recs.length
+      ?'<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px;">אין רשומות</td></tr>'
+      :recs.map(r=>`<tr><td><strong>${r.name||"--"}</strong></td><td><span class="badge ${r.type==="in"?"b-in":"b-out"}">${r.type==="in"?"כניסה":"יציאה"}</span></td><td>${r.ts.toLocaleDateString("he-IL")}</td><td>${r.ts.toLocaleTimeString("he-IL",{hour12:false})}</td><td><span class="badge b-ok">${r.distanceM||"--"}מ'</span></td></tr>`).join("");
   }catch(e){showToast("שגיאה","error");}
   showLoading(false);
 }
 
 async function loadEmpList(){
+  if(!window._fbGetEmps)return;
   const wrap=document.getElementById("empList");
   try{
-    const emps=await window.fbGetEmployees();
+    const emps=await window._fbGetEmps();
     if(!emps.length){wrap.innerHTML='<div style="color:var(--muted);text-align:center;padding:24px;">אין עובדים</div>';return;}
     wrap.innerHTML=emps.map((e,i)=>`<div class="emp-item"><div class="av" style="background:${AVC[i%AVC.length]}">${(e.name||"?")[0]}</div><div style="flex:1;"><div class="emp-name">${e.name}</div><div class="emp-meta">${e.role==="admin"?"🔑 מנהל":"👤 עובד"} • ${e.email}</div></div></div>`).join("");
     ["fEmp","expEmp"].forEach(id=>{
@@ -478,49 +413,49 @@ async function loadEmpList(){
 }
 
 async function addEmployee(){
+  if(!window._fbCreateUser)return showToast("מתחבר...","info");
   const name=document.getElementById("newName").value.trim();
   const idNum=document.getElementById("newID").value.trim();
   const pass=document.getElementById("newPass").value;
   const role=document.getElementById("newRole").value;
   if(!name||!idNum||!pass)return showToast("מלא את כל השדות","error");
-  if(idNum.length<5)return showToast("תעודת זהות לא תקינה","error");
+  if(idNum.length<5)return showToast("ת\"ז לא תקינה","error");
   if(pass.length<6)return showToast("סיסמה — לפחות 6 תווים","error");
-  const email=idNum+"@meirav-attendance.co.il";
   showLoading(true,"מוסיף עובד...");
   try{
-    await window.fbCreateUser(email,pass,name,role);
-    showToast("✅ עובד נוסף","success");
+    await window._fbCreateUser(idNum+"@meirav-attendance.co.il",pass,name,role);
+    showToast("✅ עובד נוסף בהצלחה","success");
     ["newName","newID","newPass"].forEach(id=>document.getElementById(id).value="");
     loadEmpList();
   }catch(e){showToast("שגיאה: "+(e.code==="auth/email-already-in-use"?"ת\"ז כבר קיימת":e.message),"error");}
   showLoading(false);
 }
 
-async function getExpRecs(){
-  const from=document.getElementById("expFrom").value,to=document.getElementById("expTo").value,uid=document.getElementById("expEmp").value;
-  return await window.fbLoadAtt(uid||null,from?new Date(from):null,to?new Date(to+"T23:59:59"):null);
-}
 async function exportExcel(){
+  if(!window._fbLoadAtt)return;
   showLoading(true,"מייצא...");
   try{
-    const recs=await getExpRecs();
-    const rows=recs.map(r=({"שם":r.name||"--","פעולה":r.type==="in"?"כניסה":"יציאה","תאריך":r.ts.toLocaleDateString("he-IL"),"שעה":r.ts.toLocaleTimeString("he-IL",{hour12:false}),"מרחק (מ')":r.distanceM||""}));
-    const ws=XLSX.utils.json_to_sheet(rows);
+    const recs=await window._fbLoadAtt(document.getElementById("expEmp").value||null,document.getElementById("expFrom").value?new Date(document.getElementById("expFrom").value):null,document.getElementById("expTo").value?new Date(document.getElementById("expTo").value+"T23:59:59"):null);
+    const ws=XLSX.utils.json_to_sheet(recs.map(r=>( {"שם":r.name||"--","פעולה":r.type==="in"?"כניסה":"יציאה","תאריך":r.ts.toLocaleDateString("he-IL"),"שעה":r.ts.toLocaleTimeString("he-IL",{hour12:false}),"מרחק":r.distanceM||""})));
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"נוכחות");
     XLSX.writeFile(wb,"נוכחות_מירב.xlsx");showToast("✅ Excel נוצר","success");
-  }catch(e){showToast("שגיאה: "+e,"error");}showLoading(false);
+  }catch(e){showToast("שגיאה","error");}
+  showLoading(false);
 }
+
 async function exportPDF(){
+  if(!window._fbLoadAtt)return;
   showLoading(true,"מייצא...");
   try{
-    const recs=await getExpRecs();
-    const{jsPDF}=window.jspdf;const doc=new jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
+    const recs=await window._fbLoadAtt(document.getElementById("expEmp").value||null,document.getElementById("expFrom").value?new Date(document.getElementById("expFrom").value):null,document.getElementById("expTo").value?new Date(document.getElementById("expTo").value+"T23:59:59"):null);
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
     doc.setFillColor(11,17,32);doc.rect(0,0,297,210,"F");
-    doc.setTextColor(226,232,240);doc.setFontSize(16);
-    doc.text("Meirav Attendance Report",148,16,{align:"center"});
-    doc.autoTable({head:[["Employee","Action","Date","Time","Distance(m)"]],body:recs.map(r=>[r.name||"--",r.type==="in"?"In":"Out",r.ts.toLocaleDateString("he-IL"),r.ts.toLocaleTimeString("he-IL",{hour12:false}),r.distanceM||""]),startY:28,styles:{font:"helvetica",fontSize:9,textColor:[226,232,240],fillColor:[19,29,48]},headStyles:{fillColor:[30,48,80],textColor:[255,255,255],fontStyle:"bold"},alternateRowStyles:{fillColor:[26,38,64]},theme:"grid",margin:{left:10,right:10}});
+    doc.setTextColor(226,232,240);doc.setFontSize(16);doc.text("Meirav Ltd - Attendance Report",148,14,{align:"center"});
+    doc.autoTable({head:[["Employee","Action","Date","Time","Distance"]],body:recs.map(r=>[r.name||"--",r.type==="in"?"In":"Out",r.ts.toLocaleDateString("he-IL"),r.ts.toLocaleTimeString("he-IL",{hour12:false}),r.distanceM||""]),startY:22,styles:{fontSize:9,textColor:[226,232,240],fillColor:[19,29,48]},headStyles:{fillColor:[30,48,80],textColor:[255,255,255]},theme:"grid",margin:{left:10,right:10}});
     doc.save("נוכחות_מירב.pdf");showToast("✅ PDF נוצר","success");
-  }catch(e){showToast("שגיאה: "+e.message,"error");}showLoading(false);
+  }catch(e){showToast("שגיאה","error");}
+  showLoading(false);
 }
 
 (function(){
@@ -528,6 +463,61 @@ async function exportPDF(){
   ["fFrom","expFrom"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=`${y}-${m}-01`;});
   ["fTo","expTo"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=`${y}-${m}-${d}`;});
 })();
+</script>
+
+<!-- Firebase (module) -->
+<script type="module">
+import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import{getFirestore,collection,addDoc,query,orderBy,getDocs,serverTimestamp,doc,setDoc,getDoc,where}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged,createUserWithEmailAndPassword}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const cfg={apiKey:"AIzaSyDRs2DHv_K-pE7SWIB0fB8JarBDfl5_gW0",authDomain:"meirav-attendance.firebaseapp.com",projectId:"meirav-attendance",storageBucket:"meirav-attendance.firebasestorage.app",messagingSenderId:"466687298529",appId:"1:466687298529:web:1e1319dee5c2f6267960a0"};
+const STORE={lat:32.0862447,lng:34.8755220},RADIUS=50;
+
+function dist(la1,ln1,la2,ln2){const R=6371000,dL=(la2-la1)*Math.PI/180,dN=(ln2-ln1)*Math.PI/180,a=Math.sin(dL/2)**2+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dN/2)**2;return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
+async function ntp(){try{return new Date((await(await fetch("https://worldtimeapi.org/api/timezone/Asia/Jerusalem")).json()).datetime);}catch{return new Date();}}
+function gps(){return new Promise((res,rej)=>{if(!navigator.geolocation)return rej("GPS לא נתמך");navigator.geolocation.getCurrentPosition(p=>res({lat:p.coords.latitude,lng:p.coords.longitude,accuracy:p.coords.accuracy}),e=>rej("GPS: "+e.message),{enableHighAccuracy:true,timeout:12000});});}
+
+const app=initializeApp(cfg),db=getFirestore(app),auth=getAuth(app);
+
+onAuthStateChanged(auth,async u=>{
+  if(u){
+    const s=await getDoc(doc(db,"employees",u.uid));
+    const p=s.exists()?s.data():{name:u.email,role:"employee"};
+    showApp(p);
+  }else{showLogin();}
+});
+
+window._fbSignIn=(e,p)=>signInWithEmailAndPassword(auth,e,p);
+window._fbSignOut=()=>signOut(auth);
+window._fbGetEmps=async()=>{const s=await getDocs(collection(db,"employees"));const l=[];s.forEach(d=>l.push({uid:d.id,...d.data()}));return l;};
+window._fbCreateUser=async(email,pass,name,role)=>{const c=await createUserWithEmailAndPassword(auth,email,pass);await setDoc(doc(db,"employees",c.user.uid),{name,role,email,createdAt:new Date().toISOString()});};
+window._fbLoadAtt=async(uid,from,to)=>{
+  const c=[orderBy("timestamp","desc")];if(uid)c.push(where("uid","==",uid));
+  const s=await getDocs(query(collection(db,"attendance"),...c));
+  const r=[];s.forEach(d=>{const data=d.data();const ts=data.timestamp?.toDate?data.timestamp.toDate():new Date(data.clientTime);if(from&&ts<from)return;if(to&&ts>to)return;r.push({id:d.id,...data,ts});});return r;
+};
+window._fbPunch=async(type)=>{
+  const u=auth.currentUser;if(!u)return showToast("לא מחובר","error");
+  showLoading(true,type==="in"?"בודק מיקום...":"רושם יציאה...");
+  try{
+    const[t,g]=await Promise.all([ntp(),gps()]);
+    const d=dist(g.lat,g.lng,STORE.lat,STORE.lng);
+    if(d>RADIUS){showLoading(false);showToast("❌ מחוץ לטווח — "+Math.round(d)+"מ' (מותר "+RADIUS+"מ')","error");return;}
+    const s=await getDoc(doc(db,"employees",u.uid));
+    const p=s.exists()?s.data():{name:u.email,role:"employee"};
+    await addDoc(collection(db,"attendance"),{uid:u.uid,name:p.name,type,timestamp:serverTimestamp(),clientTime:t.toISOString(),distanceM:Math.round(d),inGeofence:true});
+    showToast(type==="in"?"✅ כניסה נרשמה!":"✅ יציאה נרשמה!","success");
+    if(window._updatePunch)window._updatePunch(type,t,Math.round(d));
+  }catch(e){showToast("שגיאה: "+e,"error");}
+  showLoading(false);
+};
+window._updatePunch=(type,time,d)=>{
+  document.getElementById("statAction").textContent=type==="in"?"✅ כניסה":"🔴 יציאה";
+  document.getElementById("statTime").textContent=time.toLocaleTimeString("he-IL",{hour12:false});
+  document.getElementById("statDist").textContent=d+"מ' ✓";
+  document.getElementById("statDot").className="dot "+(type==="in"?"dot-g":"dot-m");
+};
 </script>
 </body>
 </html>
