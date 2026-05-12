@@ -404,12 +404,45 @@ async function loadEmpList(){
   try{
     const emps=await window._fbGetEmps();
     if(!emps.length){wrap.innerHTML='<div style="color:var(--muted);text-align:center;padding:24px;">אין עובדים</div>';return;}
-    wrap.innerHTML=emps.map((e,i)=>`<div class="emp-item"><div class="av" style="background:${AVC[i%AVC.length]}">${(e.name||"?")[0]}</div><div style="flex:1;"><div class="emp-name">${e.name}</div><div class="emp-meta">${e.role==="admin"?"🔑 מנהל":"👤 עובד"} • ${e.email}</div></div></div>`).join("");
+    wrap.innerHTML=emps.map((e,i)=>`
+      <div class="emp-item" id="emp-${e.uid}">
+        <div class="av" style="background:${AVC[i%AVC.length]}">${(e.name||"?")[0]}</div>
+        <div style="flex:1;">
+          <div class="emp-name">${e.name}</div>
+          <div class="emp-meta">${e.role==="admin"?"🔑 מנהל":"👤 עובד"} • ${e.email}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px;">
+          <button onclick="editEmp('${e.uid}','${e.name}','${e.role}')"
+            style="background:rgba(59,130,246,.15);border:none;border-radius:7px;padding:5px 10px;color:#3b82f6;font-family:var(--font);font-size:12px;cursor:pointer;">✏️ ערוך</button>
+          <button onclick="deleteEmp('${e.uid}','${e.name}')"
+            style="background:rgba(239,68,68,.15);border:none;border-radius:7px;padding:5px 10px;color:#ef4444;font-family:var(--font);font-size:12px;cursor:pointer;">🗑️ מחק</button>
+        </div>
+      </div>`).join("");
     ["fEmp","expEmp"].forEach(id=>{
       const sel=document.getElementById(id);if(!sel)return;
       sel.innerHTML='<option value="">כל העובדים</option>'+emps.map(e=>`<option value="${e.uid}">${e.name}</option>`).join("");
     });
   }catch(e){wrap.innerHTML='<div style="color:var(--red);">שגיאה</div>';}
+}
+
+function editEmp(uid, currentName, currentRole){
+  const newName = prompt("שם חדש:", currentName);
+  if(!newName) return;
+  const newRole = confirm("האם לשנות למנהל?\n(אישור = מנהל, ביטול = עובד)") ? "admin" : "employee";
+  showLoading(true,"מעדכן...");
+  window._fbUpdateEmp(uid, newName.trim(), newRole)
+    .then(()=>{ showToast("✅ עובד עודכן","success"); loadEmpList(); })
+    .catch(e=>showToast("שגיאה: "+e.message,"error"))
+    .finally(()=>showLoading(false));
+}
+
+function deleteEmp(uid, name){
+  if(!confirm(`למחוק את "${name}"?\nפעולה זו לא ניתנת לביטול.`)) return;
+  showLoading(true,"מוחק...");
+  window._fbDeleteEmp(uid)
+    .then(()=>{ showToast("✅ עובד נמחק","success"); loadEmpList(); })
+    .catch(e=>showToast("שגיאה: "+e.message,"error"))
+    .finally(()=>showLoading(false));
 }
 
 async function addEmployee(){
@@ -492,6 +525,14 @@ window._fbSignIn=(e,p)=>signInWithEmailAndPassword(auth,e,p);
 window._fbSignOut=()=>signOut(auth);
 window._fbGetEmps=async()=>{const s=await getDocs(collection(db,"employees"));const l=[];s.forEach(d=>l.push({uid:d.id,...d.data()}));return l;};
 window._fbCreateUser=async(email,pass,name,role)=>{const c=await createUserWithEmailAndPassword(auth,email,pass);await setDoc(doc(db,"employees",c.user.uid),{name,role,email,createdAt:new Date().toISOString()});};
+window._fbUpdateEmp=async(uid,name,role)=>{
+  await setDoc(doc(db,"employees",uid),{name,role},{merge:true});
+};
+window._fbDeleteEmp=async(uid)=>{
+  const{deleteDoc:del}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+  await del(doc(db,"employees",uid));
+};
+
 window._fbLoadAtt=async(uid,from,to)=>{
   const c=[orderBy("timestamp","desc")];if(uid)c.push(where("uid","==",uid));
   const s=await getDocs(query(collection(db,"attendance"),...c));
