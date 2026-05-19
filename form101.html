@@ -398,7 +398,7 @@ onAuthStateChanged(auth,async u=>{
     }catch(e){}
   }
   showLoading(false);
-  setTimeout(initCanvas,500);
+  setTimeout(initCanvas,1000);
 });
 
 function fillForm(d){
@@ -491,7 +491,7 @@ function updateTextSig(){
 function switchToForm(){
   document.getElementById("adminView").style.display="none";
   document.getElementById("formView").style.display="block";
-  setTimeout(initCanvas,500);
+  setTimeout(initCanvas,100);
 }
 
 async function loadForms(){
