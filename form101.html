@@ -713,6 +713,8 @@ function printForm(){
 function closePrint(){
   document.getElementById("printOverlay").classList.remove("show");
 }
+const COMPANY_SIG="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMDAgMTMwIiB3aWR0aD0iMzAwIiBoZWlnaHQ9IjEzMCI+CiAgPGRlZnM+CiAgICA8ZmlsdGVyIGlkPSJpbmsiPgogICAgICA8ZmVUdXJidWxlbmNlIHR5cGU9ImZyYWN0YWxOb2lzZSIgYmFzZUZyZXF1ZW5jeT0iMC4wNCIgbnVtT2N0YXZlcz0iNSIgcmVzdWx0PSJub2lzZSIvPgogICAgICA8ZmVEaXNwbGFjZW1lbnRNYXAgaW49IlNvdXJjZUdyYXBoaWMiIGluMj0ibm9pc2UiIHNjYWxlPSIxLjUiIHhDaGFubmVsU2VsZWN0b3I9IlIiIHlDaGFubmVsU2VsZWN0b3I9IkciLz4KICAgIDwvZmlsdGVyPgogIDwvZGVmcz4KCiAgPHBhdGggZD0iTSAyMCA5NSBDIDQ0IDg4LCA2MCAxMDUsIDkwIDkyIEMgMTIwIDc5LCAxNDAgOTgsIDE4MCA4OCBDIDI4MCA4MCwgMjQwIDk2LCAyNzAgODUiCiAgICBzdHJva2U9IiMxYTNhOGEiIHN0cm9rZS13aWR0aD0iMi4yIiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiIGZpbHRlcj0idXJsKCNpbmspIiBvcGFjaXR5PSIwLjg1Ii8+CgogIDx0ZXh0IHg9IjE1MCIgeT0iMjgiIHRleHQtYW5jaG9yPSJtaWRkbGUiCiAgICBmb250LWZhbWlseT0iJ0ZyYW5rIFJ1aGwgTGlicmUnLCAnQXJpYWwgSGVicmV3JywgQXJpYWwsIHNhbnMtc2VyaWYiCiAgICBmb250LXNpemU9IjE3IiBmb250LXdlaWdodD0iNzAwIiBmaWxsPSIjMWEzYThhIgogICAgZmlsdGVyPSJ1cmwoI2luaykiIG9wYWNpdHk9IjAuOSIKICAgIGxldHRlci1zcGFjaW5nPSIwLjUiPgogICAg157XmdeXl5HXqCDXkdefINmZ16LXp9eV15HXmSDXl9eR16jXldeqINmR15IiNQogIDwvdGV4dD4KCiAgPHRleHQgeD0iMTUwIiB5PSI1MiIgdGV4dC1hbmNob3I9Im1pZGRsZSIKICAgIGZvbnQtZmFtaWx5PSInRnJhbmsgUnVobCBMaWJyZScsICdBcmlhbCBIZWJyZXcnLCBBcmlhbCwgc2Fucy1zZXJpZiIKICAgIGZvbnQtc2l6ZT0iMTMiIGZpbGw9IiMxYTNhOGEiCiAgICBmaWx0ZXI9InVybCgjaW5rKSIgb3BhY2l0eT0iMC44MiI+CiAgICDXkdeV16jXldebl5fXkSAxOCDXpNen15cg16rXp9eV16nXlAogIDwvdGV4dD4KCiAgPHRleHQgeD0iMTUwIiB5PSI3MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIKICAgIGZvbnQtZmFtaWx5PSInRnJhbmsgUnVobCBMaWJyZScsICdBcmlhbCBIZWJyZXcnLCBBcmlhbCwgc2Fucy1zZXJpZiIKICAgIGZvbnQtc2l6ZT0iMTIiIGZpbGw9IiMxYTNhOGEiCiAgICBmaWx0ZXI9InVybCgjaW5rKSIgb3BhY2l0eT0iMC43OCI+CiAgICDXly7XpCA1MTQzOTk1OTEKICA8L3RleHQ+CgogIDxwYXRoIGQ9Ik0gMzAgOCBDIDgwIDQsIDE1MCAyLCAyMjAgNSBDIDI1MCA2LCAyNzAgOSwgMjgwIDEwIgogICAgc3Ryb2tlPSIjMWEzYThhIiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBmaWx0ZXI9InVybCgjaW5rKSIgb3BhY2l0eT0iMC41Ii8+CgogIDxwYXRoIGQ9Ik0gMjUgMTA4IEMgNzAgMTA1LCAxNTAgMTA3LCAyNDAgMTA0IEMgMjYwIDEwMywgMjc1IDEwNiwgMjg1IDEwOCIKICAgIHN0cm9rZT0iIzFhM2E4YSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgZmlsdGVyPSJ1cmwoI2luaykiIG9wYWNpdHk9IjAuNSIvPgo8L3N2Zz4K";
+
 function fmtDate(d){
   if(!d)return"";
   if(/^\d{4}-\d{2}-\d{2}$/.test(d)){
@@ -827,7 +829,7 @@ function renderPrint(d){
       </div>
       <div class="pr">
         <div style="flex:1;"><div class="sig-box">${sig}<div class="sig-line"></div><div class="sig-lbl">חתימת העובד/ת</div></div></div>
-        <div style="flex:1;"><div class="sig-box"><div style="height:50px;"></div><div class="sig-line"></div><div class="sig-lbl">חתימת המעסיק</div></div></div>
+        <div style="flex:1;"><div class="sig-box"><img src="${COMPANY_SIG}" style="max-height:60px;max-width:200px;margin-bottom:4px;"><div class="sig-line"></div><div class="sig-lbl">חתימת המעסיק</div></div></div>
       </div>
     </div></div>
 
